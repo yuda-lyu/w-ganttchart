@@ -1,0 +1,120 @@
+// WGanttchart — 甘特圖產圖入口: 輸入正規化甘特數據 inp, 產出 PNG 圖
+//   inp: 正規化甘特數據 { axisStart, axisEnd, rows }(與繪圖庫無關; 色票鍵見 buildHtml.mjs 之 PALETTE)
+//   繪製: 以 Playwright 之 Chromium 渲染 vis-timeline, 2 倍解析度; 圖內不畫圖名, 橫條不帶文字
+//   vis-timeline 由 jsDelivr 載入(buildHtml.mjs), 產製時須可連線; 腳本載入失敗(連線失敗或回應錯誤)即拋錯, 不以不明原因逾時收場
+//   回傳: Promise<Buffer>(PNG)
+import { chromium } from 'playwright'
+import isestr from 'wsemi/src/isestr.mjs'
+import iseobj from 'wsemi/src/iseobj.mjs'
+import isearr from 'wsemi/src/isearr.mjs'
+import isday from 'wsemi/src/isday.mjs'
+import buildHtml, { CDN_HOST } from './buildHtml.mjs'
+
+// isLibJs: 是否為繪圖庫腳本(頁面唯一載入之 .js, 來自 jsDelivr); 腳本缺失則頁面無 vis, 無法繪圖
+// 同頁之樣式表(.css)不監看: vis-timeline 之 standalone 腳本已內含樣式, 僅樣式載入失敗時輸出與正常位元組相同
+const isLibJs = (url) => new URL(url).pathname.endsWith('.js')
+
+// check: 檢測輸入, 不合即拋錯; 訊息只帶參數名與索引, 不回顯輸入值
+function check(inp) {
+    if (!iseobj(inp)) {
+        throw new Error('invalid inp: must be an object { axisStart, axisEnd, rows }')
+    }
+    if (!isday(inp.axisStart) || !isday(inp.axisEnd)) {
+        throw new Error('invalid inp.axisStart or inp.axisEnd: must be a date string YYYY-MM-DD')
+    }
+    if (inp.axisStart >= inp.axisEnd) {
+        throw new Error('invalid inp.axisEnd: must be later than inp.axisStart')
+    }
+    if (!isearr(inp.rows)) {
+        throw new Error('invalid inp.rows: must be a non-empty array')
+    }
+    let ids = new Set()
+    inp.rows.forEach((r, i) => {
+        if (!iseobj(r)) {
+            throw new Error(`invalid inp.rows[${i}]: must be an object`)
+        }
+        if (!isestr(r.id)) {
+            throw new Error(`invalid inp.rows[${i}].id: must be a non-empty string`)
+        }
+        if (ids.has(r.id)) {
+            throw new Error(`invalid inp.rows[${i}].id: must be unique`)
+        }
+        ids.add(r.id)
+        if (!isestr(r.label)) {
+            throw new Error(`invalid inp.rows[${i}].label: must be a non-empty string`)
+        }
+        if (!isday(r.start)) {
+            throw new Error(`invalid inp.rows[${i}].start: must be a date string YYYY-MM-DD`)
+        }
+        if (!isday(r.end)) {
+            throw new Error(`invalid inp.rows[${i}].end: must be a date string YYYY-MM-DD`)
+        }
+        if (r.start > r.end) {
+            throw new Error(`invalid inp.rows[${i}].end: must not be earlier than start`)
+        }
+    })
+}
+
+/**
+ * 產製甘特圖 PNG(以 vis-timeline 繪製,需網路載 CDN)
+ *
+ * @param {Object} inp 輸入正規化甘特數據物件,格式 { axisStart, axisEnd, rows }
+ * @param {String} inp.axisStart 輸入時間軸起始日字串,格式 'YYYY-MM-DD'
+ * @param {String} inp.axisEnd 輸入時間軸結束日字串,格式 'YYYY-MM-DD',須晚於 axisStart
+ * @param {Array} inp.rows 輸入橫條陣列,依序由上而下,每項為 { id, label, start, end, cls? };id 為唯一鍵(不可重複),label 為左側列標籤(以純文字呈現),start、end 為橫條起迄日('YYYY-MM-DD',end 不可早於 start),cls 為色票鍵(navy、azure、sky,未給或查無視為 azure)
+ * @returns {Promise} 回傳 Promise,resolve 回傳 PNG 圖之 Buffer,reject 回傳錯誤訊息;輸入不合或繪圖庫(jsDelivr)載入失敗皆 reject
+ * @example
+ *
+ * import fs from 'fs'
+ * import WGanttchart from 'w-ganttchart'
+ *
+ * let inp = {
+ *     axisStart: '2026-01-01',
+ *     axisEnd: '2027-01-01',
+ *     rows: [
+ *         { id: 'a', label: '需求訪談', start: '2026-01-01', end: '2026-04-01', cls: 'navy' },
+ *         { id: 'b', label: '系統開發', start: '2026-03-01', end: '2026-10-01', cls: 'azure' },
+ *         { id: 'c', label: '驗收交付', start: '2026-10-01', end: '2027-01-01', cls: 'sky' },
+ *     ],
+ * }
+ *
+ * let buf = await WGanttchart(inp)
+ * fs.writeFileSync('gantt.png', buf)
+ * // => 產出 gantt.png
+ */
+async function WGanttchart(inp) {
+    check(inp)
+
+    let browser = await chromium.launch()
+    try {
+        let page = await browser.newPage({ deviceScaleFactor: 2 }) // 2x 提高清晰度
+
+        // 監看繪圖庫腳本之載入: 連線失敗或回應錯誤時頁面無 vis, 須明確拋錯(否則只在 15 秒元素等待逾時後以不明原因失敗)
+        // 原因只記 Chromium 之網路錯誤碼(net::ERR_*)或 HTTP 狀態碼, 不帶來源回應之原文; 回應錯誤時 Chromium 另報 ERR_ABORTED, 以 HTTP 狀態碼為準
+        let reason = ''
+        page.on('requestfailed', (req) => {
+            if (isLibJs(req.url()) && reason === '') {
+                let f = req.failure()
+                reason = f ? f.errorText : 'unknown'
+            }
+        })
+        page.on('response', (res) => {
+            if (isLibJs(res.url()) && res.status() >= 400) {
+                reason = `HTTP ${res.status()}`
+            }
+        })
+
+        await page.setContent(buildHtml(inp), { waitUntil: 'networkidle' }) // 等 CDN 資源載畢
+        if (reason !== '') {
+            throw new Error(`failed to load vis-timeline from ${CDN_HOST} (${reason}): check network connectivity`)
+        }
+        await page.evaluate(() => document.fonts.ready) // 確保字型載入
+        await page.locator('#gantt .vis-item').first().waitFor({ timeout: 15000 }) // 等 timeline 完成繪製
+        return await page.locator('.wrap').screenshot()
+    }
+    finally {
+        await browser.close()
+    }
+}
+
+export default WGanttchart
