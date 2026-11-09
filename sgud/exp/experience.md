@@ -9,6 +9,9 @@
 3. **以「不開頁面」驗證檢測先於副作用**:用 `withPageHook` 計頁面數,斷言為 0;不要用計時斷言(`Date.now()` 差)——負載下會漂移.
 4. 變異試驗之作法:在 `./tmp/` 建 `src` + `test` 副本(專案根之 `node_modules` 會被上層解析找到,不需連結),對副本單點改字串,以 `--grep` 只跑對應測試,斷言「有紅」;`MUTATION-NOT-APPLIED`(字串沒替換到)須視為腳本錯誤而非「被殺」.
 
+5. **升 `pixelmatch` 大版本時,先看標準圖與新圖是否位元相同,再談度量差異**(2026-11-09 升 7.2.0 → 8.0.0):8 之色差度量由 YIQ 改為 OKLab HyAB,敏感處在近黑區明度與飽和色色偏,且無選項可還原 7.本套件產出之圖不透明、位元組穩定(同輸入三次產圖與 `gantt.png` 逐位元組相同),故新舊度量計數皆 0,不需重產;若日後標準圖增加(深色、飽和色票)才可能出現「僅度量之差」,屆時先以暫裝舊版對照(`npm i --no-save pixelmatch7@npm:pixelmatch@7.2.0`)分類,再依 R-GANTT-TEST-01 第 4 條處理.
+6. **`npm install <套件>` 會順帶同步 `package-lock.json` 頂層 `version` 至 `package.json`,並使 `package.json` 末尾多一個換行**:本套件之 lock 版號原落後 `package.json`,升依賴後 diff 出現與依賴無關之版號行;不屬本次改動時應還原該兩行與末尾換行,免得被誤認為改了版號.
+
 ## 環境與工具
 
 1. `quiet-run` 以 cmd 執行指令,`./node_modules/.bin/jsdoc` 之類路徑形式不可用(報「'.' 不是內部或外部命令」);改 `npx jsdoc -c .jsdoc`、`npx eslint ...`.

@@ -29,7 +29,7 @@ function assertBaseline(buf, name) {
     let pc = PNG.sync.read(buf)
     let same = pb.width === pc.width && pb.height === pc.height
     let diffPng = same ? new PNG({ width: pb.width, height: pb.height }) : null
-    let n = same ? pixelmatch(pb.data, pc.data, diffPng.data, pb.width, pb.height, { includeAA: false, threshold: 0.1 }) : Infinity
+    let n = same ? pixelmatch(pb.data, pc.data, diffPng.data, pb.width, pb.height, { includeAA: false, threshold: 0.1, checkerboard: true }) : Infinity
     if (n > MAX_DIFF) {
         let dir = path.resolve('testPending')
         let ts = Date.now()

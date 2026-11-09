@@ -57,6 +57,18 @@
 - 已知限制: CDN 無回應(請求懸置)時由 Playwright 之 `setContent` 逾時(30 秒)reject,訊息為其原文(不經本套件改寫,亦未以測試覆蓋).
 - 測試: `test/unit-wganttchart-load.test.mjs`(全數連線失敗、僅腳本失敗、HTTP 404、HTTP 503 訊息不帶原文、僅樣式表失敗仍與標準圖一致、未攔截可產出).
 
+## R-GANTT-TEST-01 標準圖比對:反鋸齒感知容差,度量為 pixelmatch 8
+
+- 依據: 全域測試規範(語意斷言為主、pixel baseline 為補強層、容差非 byte-exact);使用端對外部依賴保持最新之裁示(Gitea 建議檔「測試之影像比對改用 pixelmatch 8」,主控定案).
+- 單一擁有者: `test/tools/lib.mjs` 之 `assertBaseline(buf, name)`(測試檔皆經此比對,不另寫第二份).
+- 規則:
+  1. 以 `pixelmatch`(devDependencies `^8.0.0`,lock 釘 8.0.0)計差異像素數,選項固定 `{ includeAA: false, threshold: 0.1, checkerboard: true }`;8 之色差度量為 OKLab HyAB(7 為 YIQ),無選項可還原 7 之判定;`checkerboard: true` 為透明背景下以棋盤格為底合成後再比,對本套件不透明之圖無影響.
+  2. 容差 `MAX_DIFF = 100` 像素,不放寬、不改 `threshold`;尺寸不同直接失敗;缺標準圖即失敗.
+  3. 比對失敗之三聯組證據(capture/baseline/diff)落 `./testPending/`,不覆蓋、不自動刪.
+  4. 標準圖只因有效內容改變而重產(`UPDATE_BASELINE=1` 搭 `--grep <案名>`),且須取得授權;度量升版造成之差異,先分類為「僅度量之差」與「內容真改」,前者經目視確認畫面未變且取得授權者才重產,不整批、不放寬容差.
+- 盤點指令: Grep `test/` 搜 `pixelmatch\(` 應只有 `test/tools/lib.mjs` 一處;`npm ls pixelmatch` 應為 8.x.
+- 測試: `test/unit-wganttchart.test.mjs`「產出成品與標準圖」、`test/unit-wganttchart-load.test.mjs`「僅樣式表失敗仍與標準圖一致」.
+
 ## R-GANTT-BUILD-01 發布與建置機制:一律依 dspec,不自創
 
 - 依據: dspec〈自有套件之發布與建置腳本〉(A 型,使用者 2026-11-02 裁示統一機制)、〈自有套件之npm發布範圍〉、〈自有套件之瀏覽器端取用與gh-pages〉.
