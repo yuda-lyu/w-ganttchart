@@ -4,7 +4,7 @@
 
 ## 測試
 
-1. **被測函式自行 `chromium.launch()`、對外無 opt 時,模擬網路失敗用掛鉤,不改 src**:`test/tools/lib.mjs` 之 `withPageHook(hook, fn)` 於 `fn` 執行期間暫時包裝共用 `chromium` 物件之 `launch`,讓其回傳之 browser 的 `newPage` 先對每個頁面執行 `hook(page)`(如 `page.route(/cdn\.jsdelivr\.net/, r => r.abort('namenotresolved'))`),`finally` 還原.src 與測試匯入同一份 `playwright` 模組實例,故掛鉤有效;掛鉤沒生效時,依賴它的測試會因函式正常產圖而紅(不會假綠).
+1. **被測函式自行啟動瀏覽器(`wpw.launchChromium()`)、對外無 opt 時,模擬網路失敗用掛鉤,不改 src**:`test/tools/lib.mjs` 之 `withPageHook(hook, fn)` 以 w-playwright 之 `setBrowserTypeForTest({ launch: async (o, next) => … })` 設替身,於其中 `let browser = await next()`(`next()` 以合併後選項走真 Playwright)取得真瀏覽器,再包裝其 `newPage` 先對每個頁面執行 `hook(page)`(如 `page.route(/cdn\.jsdelivr\.net/, r => r.abort('namenotresolved'))`),`finally` 呼叫還原函數.src 與測試匯入同一份 `w-playwright` 模組實例(皆解析於本套件 `node_modules`),故替身有效;掛鉤沒生效時,依賴它的測試會因函式正常產圖而紅(不會假綠).2026-11-13 前此處包裝的是共用之 `playwright` `chromium` 物件(已移除該依賴,不得再直接匯入).
 2. **只攔樣式表(`.css`)、不攔腳本**時,輸出與正常位元組相同(`vis-timeline@7.7.3` 之 standalone 腳本已內含樣式),**不是**「無聲走樣」——曾誤以此為前提而把樣式失敗也當載入失敗,實測推翻;只攔腳本時頁面無 `vis`,原型以 15 秒元素等待逾時(訊息不指明原因)收場.攔截回 HTTP 404/5xx 之腳本時,Chromium 另報 `net::ERR_ABORTED` 之 `requestfailed`,訊息須以 HTTP 狀態碼為準.
 3. **以「不開頁面」驗證檢測先於副作用**:用 `withPageHook` 計頁面數,斷言為 0;不要用計時斷言(`Date.now()` 差)——負載下會漂移.
 4. 變異試驗之作法:在 `./tmp/` 建 `src` + `test` 副本(專案根之 `node_modules` 會被上層解析找到,不需連結),對副本單點改字串,以 `--grep` 只跑對應測試,斷言「有紅」;`MUTATION-NOT-APPLIED`(字串沒替換到)須視為腳本錯誤而非「被殺」.
@@ -12,12 +12,17 @@
 5. **升 `pixelmatch` 大版本時,先看標準圖與新圖是否位元相同,再談度量差異**(2026-11-09 升 7.2.0 → 8.0.0):8 之色差度量由 YIQ 改為 OKLab HyAB,敏感處在近黑區明度與飽和色色偏,且無選項可還原 7.本套件產出之圖不透明、位元組穩定(同輸入三次產圖與 `gantt.png` 逐位元組相同),故新舊度量計數皆 0,不需重產;若日後標準圖增加(深色、飽和色票)才可能出現「僅度量之差」,屆時先以暫裝舊版對照(`npm i --no-save pixelmatch7@npm:pixelmatch@7.2.0`)分類,再依 R-GANTT-TEST-01 第 4 條處理.
 6. **`npm install <套件>` 會順帶同步 `package-lock.json` 頂層 `version` 至 `package.json`,並使 `package.json` 末尾多一個換行**:本套件之 lock 版號原落後 `package.json`,升依賴後 diff 出現與依賴無關之版號行;不屬本次改動時應還原該兩行與末尾換行,免得被誤認為改了版號.
 
+7. **啟動點遷移之「修前紅」不必啟動任何瀏覽器**(2026-11-13 遷移至 w-playwright):先裝 w-playwright(src 暫不改),新接線測試對舊 src 執行時設 `PLAYWRIGHT_BROWSERS_PATH` 指向空資料夾(`./tmp/pm-gnt/empty-browsers`),舊 src 之 `chromium.launch()` 因受管瀏覽器缺檔當場失敗,不起任何行程;測試因「替身 0 次被呼叫」而紅(2 敗),修後綠.此環境變數須在行程啟動前設(Playwright 於載入時決定目錄),`quiet-run` 會繼承.
+8. **接線測試的替身自行把關,避免「選項錯了反而真起系統 Chrome」**:替身 `launch(o, next)` 先檢 `o.channel`、`o.executablePath`、`o.headless === false`,任一不符即拋錯而不呼叫 `next()`,再由後續斷言判紅;如此日後有人把啟動點改成 `channel: 'chrome'` 時,測試是紅而不是真啟動 Chrome(此單點變異改於 `./tmp/pm-gnt/mut/` 副本,三種:繞過 w-playwright、`channel: 'chrome'`、`headless: false`,皆紅,且變異當下沒有任何瀏覽器被啟動).
+9. **`npm install`／`npm uninstall` 再次使 `package-lock.json` 頂層 `version` 由 1.0.9 跳到 1.0.10 並使 `package.json` 末尾多換行**(同第 6 點):遷移後須還原 lock 該兩行(`"version"` 兩處)與 `package.json` 末尾換行,`git diff` 只留依賴行.
+
 ## 環境與工具
 
 1. `quiet-run` 以 cmd 執行指令,`./node_modules/.bin/jsdoc` 之類路徑形式不可用(報「'.' 不是內部或外部命令」);改 `npx jsdoc -c .jsdoc`、`npx eslint ...`.
 2. Git Bash 之 `tar -xzf C:/...` 會把 `C:` 當成遠端主機,須加 `--force-local`.
 3. 排測試鎖可能等很久(他套件的 e2e 獨佔):前景或有時限的背景指令會把排鎖等待算進逾時而被殺,隊位隨之作廢;改以 `nohup node quiet-run.mjs --lock --timeout 14000 -- ...` 長時限排隊,並把同一輪要跑的驗證併入單一腳本(一次取鎖).腳本內容於取得鎖、node 啟動時才讀入,排隊期間仍可修改.
 4. `npm pack` 之 tarball 含 `docs/`(約 34 檔,含字型)與 `docs/dist/`,整包不到 1MB,不需 `.npmignore`.
+5. **不要對 `dist/*.umd.js`（單行壓縮檔）直接 `rg`／Grep 看行內容**:整個檔案是一行,命中即傾印整份;改用 `rg -o "require\([^)]*\)"` 或 `--max-columns`.建置驗證時先把 `dist` 備份至 `./tmp/`,實跑 `toolg/gDistRollup.mjs`(會清空 `dist` 後重產)、檢查、煙霧測試後再複製還原,避免把發布流程才該重建之產物混入本輪改動.
 
 ## 與原實作之差異(承接時審計所得)
 

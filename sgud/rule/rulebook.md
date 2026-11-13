@@ -11,7 +11,7 @@
   2. 數據 `{ axisStart, axisEnd, rows: [{ id, label, start, end, cls? }] }`;`axisStart`、`axisEnd`、`start`、`end` 為真實存在之 `YYYY-MM-DD`(wsemi `isday`);`id`、`label` 為非空字串.
   3. 檢測項(皆一般參數,必給,不合即 reject,先於開啟瀏覽器):`inp` 須為一般物件;日期格式;`axisStart` 須早於 `axisEnd`;`rows` 非空陣列且每項為物件;`id` 不重複;`label`、`start`、`end` 有效;`start` 不得晚於 `end`(同日合法).
   4. 訊息格式 `invalid <名稱>: must be <種類描述>`(英文、固定詞彙,V19),名稱為參數名或帶索引(`inp.rows[2].end`);**不回顯輸入值**(K9、V20).`cls` 為可省略之鍵:未給或查無視為 azure,不報錯(K3).
-  5. 失敗通道: 一律 reject(async 函式內 throw),不同步 throw(dspec 失敗通道 5.1).
+  5. 失敗通道: 一律 reject(async 函式內 throw),不同步 throw(dspec 失敗通道 5.1);瀏覽器啟動失敗亦 reject,`code` 為 w-playwright 之固定詞彙(`E_BROWSER_MISSING`、`E_LAUNCH`、`E_LAUNCH_TIMEOUT`、`E_ENV` 等),本套件不改寫、不包裝(R-GANTT-PW-01).
   6. 不改動呼叫端之 `inp`.
 - 站點全集: 檢測只在 `check()` 一處;`rows[i]` 之鍵 `id/label/start/end/cls` 共 5 個,前 4 個必給並檢測,`cls` 查表.
 - 盤點指令: Grep `src/` 搜 `throw new Error` → 每條訊息須為 `invalid ` 或 `failed to load ` 開頭且不含 `${r.` / `${inp.` 之值插值(索引 `${i}` 除外).
@@ -53,7 +53,7 @@
   3. 原因只含錯誤碼或狀態碼,**不帶來源回應原文**;回應錯誤時 Chromium 另報 `net::ERR_ABORTED`,以 HTTP 狀態碼為準(不併列).
   4. **樣式表(`.css`)不監看**:實測 `vis-timeline@7.7.3` 之 standalone 腳本已內含樣式,僅攔截樣式表時輸出與正常位元組相同,故其載入失敗不影響結果、不視為失敗(測試以標準圖比對證明).升版時須重新確認此性質.
   5. 升版 vis-timeline 須重產並目視比對標準圖,屬版面變更,依 R-GANTT-LAYOUT-01 先經確認.
-- 測試掛鉤: 被測函式自行 `chromium.launch()` 且對外無 opt,故測試以 `test/tools/lib.mjs` 之 `withPageHook(hook, fn)` 於共用之 `chromium` 物件暫時包裝 `launch → newPage`,對每個頁面先執行 `hook(page)`(如 `page.route` 攔截 `cdn.jsdelivr.net` 回 abort/404),結束即還原;不改 src.
+- 測試掛鉤: 被測函式自行啟動瀏覽器(`wpw.launchChromium()`)且對外無 opt,故測試以 `test/tools/lib.mjs` 之 `withPageHook(hook, fn)` 經 w-playwright 之 `setBrowserTypeForTest` 設替身(`launch: async (o, next) => { let browser = await next(); … }`,`next()` 取得真瀏覽器)暫時包裝 `launch → newPage`,對每個頁面先執行 `hook(page)`(如 `page.route` 攔截 `cdn.jsdelivr.net` 回 abort/404),結束即還原(`restore()`);不改 src,不直接匯入 `playwright`／`playwright-core`(R-GANTT-PW-01).
 - 已知限制: CDN 無回應(請求懸置)時由 Playwright 之 `setContent` 逾時(30 秒)reject,訊息為其原文(不經本套件改寫,亦未以測試覆蓋).
 - 測試: `test/unit-wganttchart-load.test.mjs`(全數連線失敗、僅腳本失敗、HTTP 404、HTTP 503 訊息不帶原文、僅樣式表失敗仍與標準圖一致、未攔截可產出).
 
@@ -69,12 +69,34 @@
 - 盤點指令: Grep `test/` 搜 `pixelmatch\(` 應只有 `test/tools/lib.mjs` 一處;`npm ls pixelmatch` 應為 8.x.
 - 測試: `test/unit-wganttchart.test.mjs`「產出成品與標準圖」、`test/unit-wganttchart-load.test.mjs`「僅樣式表失敗仍與標準圖一致」.
 
+## R-GANTT-PW-01 Chromium 系瀏覽器一律經 w-playwright 啟動:不直接依賴 playwright／playwright-core,只用受管 headless shell
+
+- 依據: Chromium 系瀏覽器(真 Chrome 153 起、完整 Chromium、Edge)每啟動一個新的根行程,即以錯誤密碼替目前之 Windows 使用者呼叫一次 `LogonUser`,10 分鐘內 10 次即鎖住帳號;自有套件 w-playwright 於每次啟動合併出恰一串 `--disable-features`(Playwright 預設＋`AutofillAiWalletPrivatePasses`＋呼叫端自給者)並統一 Playwright 版本(`playwright-core` 精確 1.64.1);w-playwright 帳本 R-PW-ONLY(啟動一律經 w-playwright)、R-PW-WIRING(使用端接線測試).
+- 單一擁有者: `src/WGanttchart.mjs` 之 `wpw.launchChromium()`(本套件唯一啟動點).
+- 規則:
+  1. `src`、`test`、`toolg` 與其他 `.mjs`／`.js` 不得以靜態匯入、動態 `import()`、`require` 引用 `playwright`／`playwright-core`;`package.json` 不宣告兩者,依賴 `w-playwright`(`dependencies`,`^1.0.1`;`pixelmatch`、`pngjs` 等測試用者在 `devDependencies`).
+  2. 啟動點只有一個,選項不給 `channel`、`executablePath`、`headless: false`(只用 Playwright 受管之 headless shell,不啟動真 Chrome、Edge、完整 Chromium);改用系統瀏覽器屬行為變更,須先經確認並補測試與 README.
+  3. 啟動失敗(含受管瀏覽器未安裝)由 w-playwright 之固定詞彙錯誤(帶 `code`)reject,本套件不攔截、不改寫;不使用 `autoInstall`(預設關,不隱含網路下載),取得受管瀏覽器之方式寫於 README(`wpw.ensureChromium()`,不寫 `npx playwright install`;離線以 `PLAYWRIGHT_BROWSERS_PATH`).
+  4. 測試模擬頁面事件一律經 `wpw.setBrowserTypeForTest`(`test/tools/lib.mjs` 之 `withPageHook`),不替換 `chromium` 物件.
+  5. 接線測試斷言替身確被呼叫、選項無 `channel`／`executablePath`／有頭、命令列恰一個 `--disable-features` 且為 `args` 最後一個元素並含 `AutofillAiWalletPrivatePasses`;替身發現選項要求系統瀏覽器或有頭時不真啟動(以拋錯代替).
+- 站點全集: 啟動點 1(`src/WGanttchart.mjs`);測試端啟動 2(`test/unit-wganttchart.test.mjs` 之 `withGantt` 經 `wpw.launchChromium()`;`test/tools/lib.mjs` 之 `withPageHook` 經 `setBrowserTypeForTest` 的 `next()`);皆為 headless shell.
+- 盤點指令(命中須為 0;先以 w-playwright 之 `src/_pw.mjs` 確認指令有效):
+
+```
+rg -n --glob '*.{mjs,js}' --glob '!**/node_modules/**' --glob '!**/dist/**' "(from\s+|import\(\s*|require\(\s*)['\"\`]playwright(-core)?['\"\`/]" <套件根>
+rg -n --glob '**/package.json' --glob '!**/node_modules/**' "\"playwright(-core)?\"\s*:" <套件根>
+rg -n "wpw\.(launchChromium|launchChromiumPersistent)\(" src
+```
+
+  第三條應只有 1 處且括號內無 `channel`／`executablePath`／`headless: false`.
+- 測試: `test/unit-wganttchart-wpw.test.mjs`(「啟動選項含守門且只用受管 headless shell,並可經 next() 真啟動產圖」「啟動失敗時 reject(帶 code),且僅啟動一次」「輸入不合時不啟動」);`test/unit-wganttchart-load.test.mjs` 與 `test/unit-wganttchart.test.mjs` 之「rows 之 id 不可重複」「未攔截時可正常產出」亦經同一接縫.變異(單點改 `src` 之啟動點,三種皆被抓到): 改為直接以 `playwright-core` 啟動、改指定 `channel: 'chrome'`、改 `headless: false`.
+
 ## R-GANTT-BUILD-01 發布與建置機制:一律依 dspec,不自創
 
 - 依據: dspec〈自有套件之發布與建置腳本〉(A 型,使用者 2026-11-02 裁示統一機制)、〈自有套件之npm發布範圍〉、〈自有套件之瀏覽器端取用與gh-pages〉.
 - 規則:
   1. `script.txt`(使用者維護,agent 不改)與 `toolg/`:`addVersion`、`modifyReadme`、`cleanFolder`、`genDocsDist` 為一行呼叫 w-package-tools 同名函數;`gDistRollup.mjs` 以 `'./src'`、`'./dist'`,呼叫 `rollupFiles`(`fns: 'WGanttchart.mjs'`,`nameDistType: 'kebabCase'`,選項寫於本檔);**不另立**推導路徑、共用設定檔、包裝層.
-  2. `playwright` 為 Node 端執行期依賴,列為 `external`/`globals`,不打包進 `dist`;`wsemi` 由 rollup 解析打入;vis-timeline 由 CDN 於頁面內載入,非 import.
+  2. `w-playwright`(自有套件,精確釘 `playwright-core` 版本)為 Node 端執行期依賴,列為 `external`/`globals`(`'w-playwright': 'w-playwright'`,先例 w-hc2png 之外部化 w-html2png),不打包進 `dist`(打進來會繞開其精確釘版);`wsemi` 由 rollup 解析打入;vis-timeline 由 CDN 於頁面內載入,非 import.
   3. 不提供 `.npmignore`: 無外部執行檔,無單一資料夾 ≥ 10MB 之非程式碼資料;npm 包＝git 版控內容(`.gitignore` 保留 `CLAUDE*.md`,不排除 `sgud`).
   4. `dist/`、`docs/`(含 `docs/dist/`)隨先例入版控,由發布流程重建;不手改.
   5. `package.json` 之 `version` 由發布流程遞增,agent 不改;scripts 僅 `test`(`mocha --no-parallel "test/*.test.mjs" --timeout 180000`)與 `deploy`.

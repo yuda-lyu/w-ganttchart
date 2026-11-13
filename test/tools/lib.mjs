@@ -4,7 +4,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import pixelmatch from 'pixelmatch'
 import { PNG } from 'pngjs'
-import { chromium } from 'playwright'
+import wpw from 'w-playwright'
 
 // 測試共用層: 像素比對(反鋸齒容差, 補強層)與網頁掛鉤(模擬載入失敗)
 
@@ -44,24 +44,26 @@ function assertBaseline(buf, name) {
 }
 
 // withPageHook: 執行 fn 期間, 讓被測函式內部開啟之每個頁面先經 hook(page)(如攔截請求以模擬連線失敗); 結束(含拋錯)即還原
-// 被測函式自行 chromium.launch()、無注入口(對外無 opt), 故於共用之 chromium 物件掛鉤, 不改 src
+// 被測函式自行啟動瀏覽器(經 w-playwright 之 wpw.launchChromium)、無注入口(對外無 opt), 故以 w-playwright 之測試接縫 setBrowserTypeForTest 包裝:
+// 替身以 next() 取得真瀏覽器(真 Playwright, 選項為 w-playwright 合併後之選項, 含守門), 再掛鉤其 newPage; 不改 src, 不直接匯入 playwright
 async function withPageHook(hook, fn) {
-    let orig = chromium.launch
-    chromium.launch = async function(...args) {
-        let browser = await orig.apply(chromium, args)
-        let newPage = browser.newPage.bind(browser)
-        browser.newPage = async (...a) => {
-            let page = await newPage(...a)
-            await hook(page)
-            return page
-        }
-        return browser
-    }
+    let restore = wpw.setBrowserTypeForTest({
+        launch: async (o, next) => {
+            let browser = await next()
+            let newPage = browser.newPage.bind(browser)
+            browser.newPage = async (...a) => {
+                let page = await newPage(...a)
+                await hook(page)
+                return page
+            }
+            return browser
+        },
+    })
     try {
         return await fn()
     }
     finally {
-        chromium.launch = orig
+        restore()
     }
 }
 

@@ -1,5 +1,5 @@
 import assert from 'assert'
-import { chromium } from 'playwright'
+import wpw from 'w-playwright'
 import WGanttchart from '../src/WGanttchart.mjs'
 import buildHtml, { PALETTE } from '../src/buildHtml.mjs'
 import { isPng, assertBaseline, withPageHook } from './tools/lib.mjs'
@@ -18,7 +18,7 @@ const inp = {
 
 // withGantt: 於真瀏覽器載入頁面, 待時間軸繪製完成後執行 fn(page)
 async function withGantt(data, fn) {
-    let browser = await chromium.launch()
+    let browser = await wpw.launchChromium()
     try {
         let page = await browser.newPage({ viewport: { width: 1400, height: 900 } })
         await page.setContent(buildHtml(data), { waitUntil: 'networkidle' })

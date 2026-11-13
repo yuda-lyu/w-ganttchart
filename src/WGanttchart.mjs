@@ -1,9 +1,10 @@
 // WGanttchart — 甘特圖產圖入口: 輸入正規化甘特數據 inp, 產出 PNG 圖
 //   inp: 正規化甘特數據 { axisStart, axisEnd, rows }(與繪圖庫無關; 色票鍵見 buildHtml.mjs 之 PALETTE)
 //   繪製: 以 Playwright 之 Chromium 渲染 vis-timeline, 2 倍解析度; 圖內不畫圖名, 橫條不帶文字
+//   啟動: 一律經自有套件 w-playwright(wpw.launchChromium), 不直接依賴 playwright; 只用 Playwright 受管之 headless shell, 不用真 Chrome、Edge、完整 Chromium
 //   vis-timeline 由 jsDelivr 載入(buildHtml.mjs), 產製時須可連線; 腳本載入失敗(連線失敗或回應錯誤)即拋錯, 不以不明原因逾時收場
 //   回傳: Promise<Buffer>(PNG)
-import { chromium } from 'playwright'
+import wpw from 'w-playwright'
 import isestr from 'wsemi/src/isestr.mjs'
 import iseobj from 'wsemi/src/iseobj.mjs'
 import isearr from 'wsemi/src/isearr.mjs'
@@ -58,11 +59,15 @@ function check(inp) {
 /**
  * 產製甘特圖 PNG(以 vis-timeline 繪製,需網路載 CDN)
  *
+ * 瀏覽器經 w-playwright 啟動(Playwright 受管之 headless shell,不使用 Google Chrome 或 Edge),啟動命令列一律含 w-playwright 之登入守門參數(`--disable-features=…,AutofillAiWalletPrivatePasses`);
+ * 受管之 headless shell 須事先安裝:`import wpw from 'w-playwright'` 後 `await wpw.ensureChromium()`(不要用 `npx playwright install`);
+ * 未安裝即 reject(code 為 E_BROWSER_MISSING),其他啟動失敗亦 reject(code 為 w-playwright 之 E_ 開頭固定詞彙)
+ *
  * @param {Object} inp 輸入正規化甘特數據物件,格式 { axisStart, axisEnd, rows }
  * @param {String} inp.axisStart 輸入時間軸起始日字串,格式 'YYYY-MM-DD'
  * @param {String} inp.axisEnd 輸入時間軸結束日字串,格式 'YYYY-MM-DD',須晚於 axisStart
  * @param {Array} inp.rows 輸入橫條陣列,依序由上而下,每項為 { id, label, start, end, cls? };id 為唯一鍵(不可重複),label 為左側列標籤(以純文字呈現),start、end 為橫條起迄日('YYYY-MM-DD',end 不可早於 start),cls 為色票鍵(navy、azure、sky,未給或查無視為 azure)
- * @returns {Promise} 回傳 Promise,resolve 回傳 PNG 圖之 Buffer,reject 回傳錯誤訊息;輸入不合或繪圖庫(jsDelivr)載入失敗皆 reject
+ * @returns {Promise} 回傳 Promise,resolve 回傳 PNG 圖之 Buffer,reject 回傳錯誤訊息;輸入不合、瀏覽器啟動失敗(含受管瀏覽器未安裝)或繪圖庫(jsDelivr)載入失敗皆 reject
  * @example
  *
  * import fs from 'fs'
@@ -85,7 +90,7 @@ function check(inp) {
 async function WGanttchart(inp) {
     check(inp)
 
-    let browser = await chromium.launch()
+    let browser = await wpw.launchChromium()
     try {
         let page = await browser.newPage({ deviceScaleFactor: 2 }) // 2x 提高清晰度
 
