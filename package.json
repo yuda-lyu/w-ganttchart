@@ -1,10 +1,10 @@
 {
   "name": "w-ganttchart",
-  "version": "1.0.12",
+  "version": "1.0.13",
   "main": "dist/w-ganttchart.umd.js",
   "dependencies": {
     "w-playwright": "^1.0.1",
-    "wsemi": "^1.9.60"
+    "wsemi": "^1.9.61"
   },
   "devDependencies": {
     "pixelmatch": "^8.0.0",
