@@ -1,9 +1,9 @@
 {
   "name": "w-ganttchart",
-  "version": "1.0.23",
+  "version": "1.0.24",
   "main": "dist/w-ganttchart.umd.js",
   "dependencies": {
-    "w-playwright": "^1.0.2",
+    "w-playwright": "^1.0.3",
     "wsemi": "^1.9.71"
   },
   "devDependencies": {
