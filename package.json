@@ -1,15 +1,15 @@
 {
   "name": "w-ganttchart",
-  "version": "1.0.26",
+  "version": "1.0.27",
   "main": "dist/w-ganttchart.umd.js",
   "dependencies": {
-    "w-playwright": "^1.0.3",
-    "wsemi": "^1.9.73"
+    "w-playwright": "^1.0.4",
+    "wsemi": "^1.9.74"
   },
   "devDependencies": {
     "pixelmatch": "^8.0.0",
     "pngjs": "^7.0.0",
-    "w-package-tools": "^1.1.29"
+    "w-package-tools": "^1.1.30"
   },
   "scripts": {
     "test": "mocha --no-parallel \"test/*.test.mjs\" --timeout 180000",
