@@ -2,6 +2,7 @@ import assert from 'assert'
 import wpw from 'w-playwright'
 import WGanttchart from '../src/WGanttchart.mjs'
 import { isPng } from './tools/lib.mjs'
+import { cdn, nextRouted, useCdnLocal } from './tools/cdnLocal.mjs'
 
 // 測試用數據: 虛構之一般性內容(同 unit-wganttchart.test.mjs)
 const inp = {
@@ -19,6 +20,9 @@ const inp = {
 // 接線測試(w-playwright 帳本 R-PW-WIRING): 本套件只有 src/WGanttchart.mjs 一個啟動點; 以 setBrowserTypeForTest 觀察其送出之選項, 並斷言替身確被呼叫
 describe('WGanttchart 啟動經 w-playwright', function() {
 
+    // 規格: 測試不連外部 CDN(R-GANTT-CDN-02); 本檔自設之替身取代基底替身, 經 next() 真啟動者改以 nextRouted(next) 取得瀏覽器
+    useCdnLocal()
+
     // 規格: 啟動點送出之選項含登入守門(命令列恰一個 --disable-features, 為 args 最後一個元素, 且含 AutofillAiWalletPrivatePasses),
     //       且只用 Playwright 受管之 headless shell(不指定 channel、executablePath, 不有頭)——本套件不啟動真 Chrome、Edge、完整 Chromium
     // 接縫不用替身: 替身以 next() 走真路徑(真啟動 headless shell 一次), 產出須為 PNG
@@ -30,9 +34,10 @@ describe('WGanttchart 啟動經 w-playwright', function() {
                 if (o.channel !== undefined || o.executablePath !== undefined || o.headless === false) {
                     throw new Error('not a headless shell launch') //安全: 若選項要求真 Chrome、Edge、完整 Chromium 或有頭, 不真啟動, 由下列斷言判紅
                 }
-                return next()
+                return nextRouted(next) // 取代基底替身, 故經 nextRouted 取得瀏覽器(掛 CDN 本地路由, 不連外部 CDN)
             },
         })
+        let served0 = cdn.stats().served.browser
         let buf
         let err = null
         try {
@@ -55,6 +60,7 @@ describe('WGanttchart 啟動經 w-playwright', function() {
         assert.ok(dis[0].split('=')[1].split(',').includes('AutofillAiWalletPrivatePasses'), `缺守門功能: ${dis[0]}`)
         assert.strictEqual(err, null, `經 next() 真啟動應成功: ${err && err.code}`)
         assert.ok(isPng(buf), '非 PNG')
+        assert.ok(cdn.stats().served.browser > served0, '繪圖庫應由本地副本供應(替身經 nextRouted 掛本地路由)')
     })
 
     // 規格: README Notes 與 JSDoc @returns 載明啟動失敗即 reject(帶 code 之 Error, 由 w-playwright 給定); 不以替身以外之途徑啟動

@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "note": "由 genCdnManifest 依根網址產生; 網址或版本改變後須重新產生; sha256 為首次取得時之釘選值",
+  "roots": {
+    "vis-timeline-css": "https://cdn.jsdelivr.net/npm/vis-timeline@7.7.3/styles/vis-timeline-graph2d.min.css",
+    "vis-timeline-js": "https://cdn.jsdelivr.net/npm/vis-timeline@7.7.3/standalone/umd/vis-timeline-graph2d.min.js"
+  },
+  "files": {
+    "https://cdn.jsdelivr.net/npm/vis-timeline@7.7.3/standalone/umd/vis-timeline-graph2d.min.js": {
+      "sha256": "55f5627557103696a538c5e662cab07d554fafc545882a082dfb5e2b5dea65d6",
+      "size": 569230
+    },
+    "https://cdn.jsdelivr.net/npm/vis-timeline@7.7.3/styles/vis-timeline-graph2d.min.css": {
+      "sha256": "b2fccd6ac3e0d7247982f11a45e8b68e0fa7e0f737b15c8c516792eb144087a5",
+      "size": 19837
+    }
+  }
+}

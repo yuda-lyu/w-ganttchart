@@ -53,9 +53,27 @@
   3. 原因只含錯誤碼或狀態碼,**不帶來源回應原文**;回應錯誤時 Chromium 另報 `net::ERR_ABORTED`,以 HTTP 狀態碼為準(不併列).
   4. **樣式表(`.css`)不監看**:實測 `vis-timeline@7.7.3` 之 standalone 腳本已內含樣式,僅攔截樣式表時輸出與正常位元組相同,故其載入失敗不影響結果、不視為失敗(測試以標準圖比對證明).升版時須重新確認此性質.
   5. 升版 vis-timeline 須重產並目視比對標準圖,屬版面變更,依 R-GANTT-LAYOUT-01 先經確認.
-- 測試掛鉤: 被測函式自行啟動瀏覽器(`wpw.launchChromium()`)且對外無 opt,故測試以 `test/tools/lib.mjs` 之 `withPageHook(hook, fn)` 經 w-playwright 之 `setBrowserTypeForTest` 設替身(`launch: async (o, next) => { let browser = await next(); … }`,`next()` 取得真瀏覽器)暫時包裝 `launch → newPage`,對每個頁面先執行 `hook(page)`(如 `page.route` 攔截 `cdn.jsdelivr.net` 回 abort/404),結束即還原(`restore()`);不改 src,不直接匯入 `playwright`／`playwright-core`(R-GANTT-PW-01).
+- 測試掛鉤: 被測函式自行啟動瀏覽器(`wpw.launchChromium()`)且對外無 opt,故測試以 `test/tools/lib.mjs` 之 `withPageHook(hook, fn)` 經 w-playwright 之 `setBrowserTypeForTest` 設替身(`launch: async (o, next) => { let browser = await next(); … }`,`next()` 取得真瀏覽器)暫時包裝 `launch → newPage`,對每個頁面先執行 `hook(page)`(如 `page.route` 攔截 `cdn.jsdelivr.net` 回 abort/404),結束即還原(`restore()`);不改 src,不直接匯入 `playwright`／`playwright-core`(R-GANTT-PW-01).替身以 `nextRouted(next)` 取得瀏覽器(先掛 CDN 本地路由,見 R-GANTT-CDN-02),故障模擬用之 `page.route` 註冊於頁面層,先於本地路由執行.
 - 已知限制: CDN 無回應(請求懸置)時由 Playwright 之 `setContent` 逾時(30 秒)reject,訊息為其原文(不經本套件改寫,亦未以測試覆蓋).
 - 測試: `test/unit-wganttchart-load.test.mjs`(全數連線失敗、僅腳本失敗、HTTP 404、HTTP 503 訊息不帶原文、僅樣式表失敗仍與標準圖一致、未攔截可產出).
+
+## R-GANTT-CDN-02 測試開啟之頁面不連外部 CDN:清單釘 sha256、內容定址快取、清單外之外部請求一律中止並使測試失敗
+
+- 依據: 全域技能 role-coder-for-test 之「測試不連外部 CDN」(外網不穩時測試轉紅、測到之內容隨 CDN 改版而飄);使用端(Gitea 另案)要求;共用函式 w-package-tools-e2e 之 `createCdnLocal`(該套件 README §2.13、§5);主控盤查 C 類(`src/buildHtml.mjs` 於頁面自 CDN 載 vis-timeline 之 css 與 UMD js).**只改測試端**: `src/` 之 CDN 網址、產品行為與輸出不變,標準圖 0 改變.
+- 單一擁有者: `test/tools/cdnLocal.mjs`(`cdn` 實例、`nextRouted`、`useCdnLocal`);清單 `test/tools/cdn.manifest.json`(入版控)由 `test/tools/cdn.roots.json` 產生.
+- 規則:
+  1. **清單**: 2 個網址(`vis-timeline@7.7.3` 之 `styles/vis-timeline-graph2d.min.css`、`standalone/umd/vis-timeline-graph2d.min.js`;該 CSS 無相對 `url()`,閉包即此 2 檔),sha256 與大小釘選.網址或版本改變(R-GANTT-CDN-01 規則 5 之升版)須同改 `cdn.roots.json` 並重新產生、審視差異: `node node_modules/w-package-tools-e2e/tools/genCdnManifest.mjs --roots test/tools/cdn.roots.json --out test/tools/cdn.manifest.json`(需連網;加 `--check` 重新下載比對、不寫檔,離開碼 1 為不同).
+  2. **取得**: 各測試檔之 describe 內呼叫 `useCdnLocal()`,其 `before`(`this.timeout(cdn.hookTimeoutMs)`,不沿用 mocha 之 180 秒)呼叫 `cdn.ensure()`: 缺什麼取什麼,以 sha256 與大小校驗後存為內容定址快取 `test/_cache/cdn/<sha256>`(`.gitignore` 列 `test/_cache`;本庫無 `.npmignore`,npm 包＝git 版控內容,故快取不入包);跨行程只下載一次(`.lock`),`downloads.jsonl` 為每網址只下載一次之證據.**首次須連網,之後離線可跑**;離線以 `W_CDN_OFFLINE=1`(缺檔即拋 `E_CDN_OFFLINE_MISSING`,不連網).
+  3. **單一啟動出口**: 所有 `wpw.setBrowserTypeForTest` 之替身一律以 `nextRouted(next)` 取得瀏覽器(取代直接 `next()`;其內掛 `cdn.routeBrowser` 並斷言 `cdn.isRouted`);`useCdnLocal()` 另於 `before` 安裝基底替身(僅 `nextRouted(next)`)、`after` 還原,使 src 之 `wpw.launchChromium()` 與測試內直接之 `wpw.launchChromium()` 亦掛路由.替身為堆疊(`next()` 直達真 BrowserType,不經下層替身),故自設替身者必須自行經 `nextRouted`.
+  4. **表外一律失敗**: 每案前後夾 `cdn.violationMark()`／`cdn.assertNoViolation(mark)`(`useCdnLocal({ guard: false })` 除外,僅供刻意製造違規之案,現只有 `unit-wganttchart-cdn.test.mjs` 之表外請求案);`routeBrowser` 預設於 `browser.close()` 後有違規即拋 `E_CDN_EXTERNAL`(src 之 `finally` 會 `close()`).清單外之 http(s) 中止並記錄.
+  5. **故障模擬不計違規**: `unit-wganttchart-load.test.mjs` 之 `page.route`(abort、fulfill)註冊於頁面層,先於本地路由執行;其攔截之網址皆在清單內,亦不被 `request` 事件觀察者記為違規(實測).
+  6. Node 端無外部 `fetch`(`src`、`test` 皆無 `fetch(`),故不呼叫 `cdn.patchFetch()`;日後 Node 端新增外部 `fetch` 者須補.
+  7. 回送位址預設放行(共用函式之預設);本庫之測試不起本機伺服器.
+- 站點全集(瀏覽器啟動路徑): A `src/WGanttchart.mjs` 之 `wpw.launchChromium()`(基底替身);B `test/unit-wganttchart.test.mjs` 之 `withGantt`(`wpw.launchChromium()`,基底替身;`unit-wganttchart-cdn.test.mjs` 之路徑 B 案與表外請求案亦同);C `test/tools/lib.mjs` 之 `withPageHook`(自設替身,`nextRouted(next)`);D `test/unit-wganttchart-wpw.test.mjs` 首案之自設替身(`nextRouted(next)`);同檔另二替身只拋錯、不啟動瀏覽器.
+- 盤點指令: `rg -n "setBrowserTypeForTest\(" test`(除 `cdnLocal.mjs` 與測試檔本身外,每個命中之檔不得出現未經 `nextRouted(next)` 之 `next(`);`rg -n "useCdnLocal\(" test`(每個 `test/*.test.mjs` 皆須命中);兩者已由 `unit-wganttchart-cdn.test.mjs`「盤點」案自動檢查.
+- 斷網驗收(可重跑;於套件根,快取已備妥): 設 `W_CDN_OFFLINE=1` 與 `NODE_OPTIONS=--import=<套件根>/test/tools/offlineBlocker.mjs` 之 file: 網址(該預載模組使瀏覽器之任何主機名稱皆無法解析、全域 fetch 拒外部,`W_OFFLINE_BLOCK_LOG` 可記錄攔截)後執行 `npm test`: 修後 29 案全綠;修前(HEAD)同環境 11 案紅(皆為繪圖庫載入失敗或 15 秒元素等待逾時).
+- 已知限制: ①清單只涵蓋頁面載入之 2 檔,頁面動態載入之其他外部資源(現無)會被記為違規而使測試失敗,屆時補列 roots;②放行之回送位址、`allow`、SharedWorker 與 Worker 內 WebSocket 等共用函式之限制見其 README §2.13〈限制〉;③`afterEach` 之違規斷言為 `close()` 拋錯之備援(漏關閉或關閉之錯誤被吞時才作用),由「mocha 層級」案(另起 mocha 子行程跑夾具,斷言關閉之錯誤被吞者於 after each 掛鉤失敗)單獨鎖住;它一旦失敗,mocha 略過同 describe 之後續案並把錯誤標在「after each」掛鉤;④盤點(`unit-wganttchart-cdn.test.mjs`)為文字掃描(去註解與字串後比對),替身改名參數(如 `(o, nxt) => nxt()`)或正規式字面值含 `//` 時可能漏抓,主檢查為各啟動路徑之「清單內每網址各供應一次」斷言與 `nextRouted` 內之 `isRouted` 斷言.
+- 測試: `test/unit-wganttchart-cdn.test.mjs`(清單之根等於產品頁面載入之外部網址、啟動路徑 A/B/C 之繪圖庫皆由本地副本供應、盤點、表外請求被中止並記違規且關閉時拋 `E_CDN_EXTERNAL`、mocha 層級: 夾具測試之外部請求使該測試失敗〔含關閉之錯誤被吞者於 after each 掛鉤失敗〕);各檔之 `useCdnLocal()`(`unit-wganttchart.test.mjs`、`unit-wganttchart-load.test.mjs`、`unit-wganttchart-wpw.test.mjs`,後者首案另斷言路徑 D 之繪圖庫由本地副本供應).
 
 ## R-GANTT-TEST-01 標準圖比對:反鋸齒感知容差,度量為 pixelmatch 8
 
@@ -79,7 +97,7 @@
   3. 啟動失敗(含受管瀏覽器未安裝)由 w-playwright 之固定詞彙錯誤(帶 `code`)reject,本套件不攔截、不改寫;不使用 `autoInstall`(預設關,不隱含網路下載),取得受管瀏覽器之方式寫於 README(`wpw.ensureChromium()`,不寫 `npx playwright install`;離線以 `PLAYWRIGHT_BROWSERS_PATH`).
   4. 測試模擬頁面事件一律經 `wpw.setBrowserTypeForTest`(`test/tools/lib.mjs` 之 `withPageHook`),不替換 `chromium` 物件.
   5. 接線測試斷言替身確被呼叫、選項無 `channel`／`executablePath`／有頭、命令列恰一個 `--disable-features` 且為 `args` 最後一個元素並含 `AutofillAiWalletPrivatePasses`;替身發現選項要求系統瀏覽器或有頭時不真啟動(以拋錯代替).
-- 站點全集: 啟動點 1(`src/WGanttchart.mjs`);測試端啟動 2(`test/unit-wganttchart.test.mjs` 之 `withGantt` 經 `wpw.launchChromium()`;`test/tools/lib.mjs` 之 `withPageHook` 經 `setBrowserTypeForTest` 的 `next()`);皆為 headless shell.
+- 站點全集: 啟動點 1(`src/WGanttchart.mjs`);測試端啟動 2(`test/unit-wganttchart.test.mjs` 之 `withGantt` 經 `wpw.launchChromium()`;`test/tools/lib.mjs` 之 `withPageHook` 經 `setBrowserTypeForTest` 的 `nextRouted(next)`〔R-GANTT-CDN-02,內即 `next()` ＋ 掛 CDN 本地路由〕);皆為 headless shell.
 - 盤點指令(命中須為 0;先以 w-playwright 之 `src/_pw.mjs` 確認指令有效):
 
 ```

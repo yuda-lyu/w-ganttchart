@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url'
 import pixelmatch from 'pixelmatch'
 import { PNG } from 'pngjs'
 import wpw from 'w-playwright'
+import { nextRouted } from './cdnLocal.mjs'
 
 // 測試共用層: 像素比對(反鋸齒容差, 補強層)與網頁掛鉤(模擬載入失敗)
 
@@ -46,10 +47,11 @@ function assertBaseline(buf, name) {
 // withPageHook: 執行 fn 期間, 讓被測函式內部開啟之每個頁面先經 hook(page)(如攔截請求以模擬連線失敗); 結束(含拋錯)即還原
 // 被測函式自行啟動瀏覽器(經 w-playwright 之 wpw.launchChromium)、無注入口(對外無 opt), 故以 w-playwright 之測試接縫 setBrowserTypeForTest 包裝:
 // 替身以 next() 取得真瀏覽器(真 Playwright, 選項為 w-playwright 合併後之選項, 含守門), 再掛鉤其 newPage; 不改 src, 不直接匯入 playwright
+// 替身置於堆疊頂而取代基底替身, 故以 nextRouted(next) 取得瀏覽器(先掛 CDN 本地路由, 其後 hook 註冊之 page.route 先於本地路由執行, 故障模擬照常生效)
 async function withPageHook(hook, fn) {
     let restore = wpw.setBrowserTypeForTest({
         launch: async (o, next) => {
-            let browser = await next()
+            let browser = await nextRouted(next)
             let newPage = browser.newPage.bind(browser)
             browser.newPage = async (...a) => {
                 let page = await newPage(...a)

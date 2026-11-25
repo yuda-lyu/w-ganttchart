@@ -11,6 +11,7 @@
 | 輸入檢測(日期、軸序、列序、id 唯一、型別;訊息不回顯值) | 完成 | R-GANTT-API-01 | 同上 |
 | 內容逃逸(label 純文字、嵌入 JSON 之 `<` 逃逸) | 完成 | R-GANTT-ESC-01 | 同上 |
 | 繪圖庫載入失敗之明確 reject(連線失敗、HTTP 錯誤、僅樣式缺失) | 完成 | R-GANTT-CDN-01 | `test/unit-wganttchart-load.test.mjs` |
+| 測試開啟之頁面不連外部 CDN(清單釘 sha256、內容定址快取 `test/_cache/cdn`、清單外之外部請求一律中止並使測試失敗;只改測試端,`src/` 與標準圖不變) | 完成(2026-11-25);首次須連網取得 2 個檔,其後離線可跑(`W_CDN_OFFLINE=1`) | R-GANTT-CDN-02 | `test/unit-wganttchart-cdn.test.mjs`、`test/tools/cdnLocal.mjs`、各測試檔之 `useCdnLocal()`;斷網驗收見該規則 |
 | 版面與標準圖(`test/pics/gantt.png`) | 沿用原型,未重產 | R-GANTT-LAYOUT-01 | `test/unit-wganttchart.test.mjs`「產出成品與標準圖」 |
 | 標準圖比對度量(`test/tools/lib.mjs` 之 `assertBaseline`) | 完成:pixelmatch 8.0.0(OKLab HyAB),`{ includeAA: false, threshold: 0.1, checkerboard: true }`,容差 `MAX_DIFF = 100` | R-GANTT-TEST-01 | 同上、`test/unit-wganttchart-load.test.mjs`「僅樣式表失敗仍與標準圖一致」 |
 | 發布與建置機制(`script.txt`、`toolg/`、`.gitignore` 等) | 完成,比照先例 | R-GANTT-BUILD-01 | 以 `toolg/` 逐支執行驗證(見下) |
@@ -24,6 +25,8 @@
 - 圖內字型為微軟正黑體,Linux 等無該字型環境產出之圖與標準圖不同(測試與標準圖皆於 Windows 產製).
 
 ## 最近一次驗證
+
+- 2026-11-25 測試不連外部 CDN(R-GANTT-CDN-02): 依賴 devDependency `w-package-tools-e2e ^1.0.51`(`createCdnLocal`);清單 2 網址(vis-timeline@7.7.3 之 css 與 UMD js);`npm test` 29 passing(原 22 ＋ `unit-wganttchart-cdn.test.mjs` 7);清空快取後首跑每網址只下載一次(`test/_cache/cdn/downloads.jsonl` 2 列、同一行程);斷網情境(`W_CDN_OFFLINE=1` ＋ `test/tools/offlineBlocker.mjs`)29 全綠、修前(HEAD)同環境 11 紅;標準圖 0 改變(本地副本、直連 CDN、標準圖三者之 PNG 逐位元組相同).
 
 - 版本: `package.json` 之 `version` 為 1.0.10(版號與發布由使用者之自動化流程處理,agent 不改);依賴 `w-playwright ^1.0.1`(裝 1.0.1,其 `playwright-core` 精確 1.64.1),已無 `playwright`.
 - 2026-11-13 遷移至 w-playwright(R-GANTT-PW-01): `npm test` 22 passing(`unit-wganttchart.test.mjs` 13、`unit-wganttchart-load.test.mjs` 6、`unit-wganttchart-wpw.test.mjs` 3),標準圖 0 張改變(「產出成品與標準圖」綠);接線測試修前紅(2 敗)修後綠,三種單點變異(繞過 w-playwright、`channel: 'chrome'`、`headless: false`)皆被抓到;`toolg/gDistRollup.mjs` 實跑通過,`dist` 僅 `require("w-playwright")`,以測試接縫對 dist 煙霧驗證啟動經 w-playwright(`dist` 為發布流程重建物,本輪驗證後還原,未改).

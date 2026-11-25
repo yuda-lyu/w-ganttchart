@@ -1,6 +1,7 @@
 import assert from 'assert'
 import WGanttchart from '../src/WGanttchart.mjs'
 import { isPng, assertBaseline, withPageHook } from './tools/lib.mjs'
+import { useCdnLocal } from './tools/cdnLocal.mjs'
 
 // 測試用數據: 虛構之一般性內容(同 unit-wganttchart.test.mjs, 以便與標準圖比對)
 const inp = {
@@ -17,6 +18,10 @@ const inp = {
 // 規格來源: src/WGanttchart.mjs 檔頭與 JSDoc(@returns): 繪圖庫腳本(jsDelivr 之 vis-timeline)載入失敗即 reject 並指明原因, 不以不明原因逾時收場
 // 模擬連線失敗: 以 withPageHook 於被測函式開啟之頁面攔截對 cdn.jsdelivr.net 之請求(被測函式無注入口, 不改 src)
 describe('WGanttchart 繪圖庫載入失敗', function() {
+
+    // 規格: 測試不連外部 CDN(R-GANTT-CDN-02); 本檔之 page.route(abort、fulfill)為故障模擬, 註冊於頁面層, 先於本地路由執行, 不計為違規
+    //       「未攔截」與「僅樣式表失敗」兩案之正常資源由本地副本供應(不連 CDN)
+    useCdnLocal()
 
     // 規格: 載入失敗之訊息須指明繪圖庫、來源主機與原因(Chromium 網路錯誤碼)
     it('繪圖庫全數連線失敗時 reject 並指明原因', async function() {

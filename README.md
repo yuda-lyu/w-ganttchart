@@ -52,6 +52,7 @@ fs.writeFileSync('gantt.png', await WGanttchart(inp))
 - 產出 PNG Buffer,經 `w-playwright` 啟動 Playwright 受管之 headless shell 渲染(取得方式見 Browser),解析度為 2 倍。圖內不畫圖名,橫條不帶文字。
 - 瀏覽器啟動失敗即 reject:`code` 為 `w-playwright` 之固定詞彙(如 `E_BROWSER_MISSING`、`E_LAUNCH`、`E_LAUNCH_TIMEOUT`、`E_ENV`),訊息不附 Playwright 之原錯誤(改版前為 Playwright 之原錯誤,如 `Executable doesn't exist at …`)。
 - 繪圖庫 vis-timeline 由 jsDelivr CDN 載入(版本精確鎖定),產製時須可連線;繪圖庫腳本連線失敗或回應錯誤時 reject(訊息指明原因),不以逾時收場。
+- 測試之網路需求(`npm test`):測試開啟之頁面不連 CDN,vis-timeline 之樣式表與腳本改由本地副本供應(清單 `test/tools/cdn.manifest.json` 以 sha256 釘選,清單外之外部請求一律中止並使測試失敗)。**首次執行須連網**取得該 2 個檔(存於 `test/_cache/cdn`,不入版控),**之後可離線執行**;以環境變數 `W_CDN_OFFLINE=1` 強制不連網(快取缺檔即失敗)。測試另需受管 headless shell(見 Browser)。此限制只在測試端,產製(`src/`)仍須連 CDN。
 - 輸入不合即 reject(訊息只帶參數名與索引,不回顯輸入值):日期須為真實存在之 `YYYY-MM-DD`、`axisEnd` 須晚於 `axisStart`、橫條 `end` 不可早於 `start`、`id` 不可重複。`label` 以純文字呈現。
 - 圖內字型固定為微軟正黑體,須於 Windows 或已安裝該字型之環境產製。
 - 時間軸細格一季一格,主軸標籤為西元純年份。橫條色票為 navy、azure、sky,未給或查無視為 azure。

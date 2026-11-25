@@ -3,6 +3,7 @@ import wpw from 'w-playwright'
 import WGanttchart from '../src/WGanttchart.mjs'
 import buildHtml, { PALETTE } from '../src/buildHtml.mjs'
 import { isPng, assertBaseline, withPageHook } from './tools/lib.mjs'
+import { useCdnLocal } from './tools/cdnLocal.mjs'
 
 // 測試用數據: 虛構之一般性內容
 const inp = {
@@ -32,6 +33,9 @@ async function withGantt(data, fn) {
 
 // 規格來源: src/WGanttchart.mjs 之 JSDoc、src/buildHtml.mjs 檔頭
 describe('WGanttchart 甘特圖', function() {
+
+    // 規格: 測試不連外部 CDN(R-GANTT-CDN-02); 本檔之 withGantt(wpw.launchChromium())與 WGanttchart(inp)皆經基底替身掛本地路由
+    useCdnLocal()
 
     // 規格: inp 格式 { axisStart, axisEnd, rows }; 日期為 'YYYY-MM-DD'; rows 每項須有 id, label, start, end
     it('inp 不合格式時拋錯', async function() {

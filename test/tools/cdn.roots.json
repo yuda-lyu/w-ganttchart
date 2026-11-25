@@ -1,0 +1,4 @@
+{
+  "vis-timeline-css": "https://cdn.jsdelivr.net/npm/vis-timeline@7.7.3/styles/vis-timeline-graph2d.min.css",
+  "vis-timeline-js": "https://cdn.jsdelivr.net/npm/vis-timeline@7.7.3/standalone/umd/vis-timeline-graph2d.min.js"
+}
