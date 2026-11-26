@@ -11,7 +11,7 @@
 | 輸入檢測(日期、軸序、列序、id 唯一、型別;訊息不回顯值) | 完成 | R-GANTT-API-01 | 同上 |
 | 內容逃逸(label 純文字、嵌入 JSON 之 `<` 逃逸) | 完成 | R-GANTT-ESC-01 | 同上 |
 | 繪圖庫載入失敗之明確 reject(連線失敗、HTTP 錯誤、僅樣式缺失) | 完成 | R-GANTT-CDN-01 | `test/unit-wganttchart-load.test.mjs` |
-| 測試開啟之頁面不連外部 CDN(清單釘 sha256、內容定址快取 `test/_cache/cdn`、清單外之外部請求一律中止並使測試失敗;只改測試端,`src/` 與標準圖不變) | 完成(2026-11-25);首次須連網取得 2 個檔,其後離線可跑(`W_CDN_OFFLINE=1`) | R-GANTT-CDN-02 | `test/unit-wganttchart-cdn.test.mjs`、`test/tools/cdnLocal.mjs`、各測試檔之 `useCdnLocal()`;斷網驗收見該規則 |
+| 測試開啟之頁面不連外部 CDN(清單釘 sha256、內容定址快取 `test/_cache/cdn`、清單外之外部請求一律中止並使測試失敗;只改測試端,`src/` 與標準圖不變) | 完成(2026-11-25);2026-11-26 路由接線改為 w-playwright 之啟動後鉤子(`useCdnLocal()` 內 `wpw.onBrowserCreated`,刪 `nextRouted`／基底替身);首次須連網取得 2 個檔,其後離線可跑(`W_CDN_OFFLINE=1`) | R-GANTT-CDN-02 | `test/unit-wganttchart-cdn.test.mjs`、`test/tools/cdnLocal.mjs`、各測試檔之 `useCdnLocal()`;斷網驗收見該規則 |
 | 版面與標準圖(`test/pics/gantt.png`) | 沿用原型,未重產 | R-GANTT-LAYOUT-01 | `test/unit-wganttchart.test.mjs`「產出成品與標準圖」 |
 | 標準圖比對度量(`test/tools/lib.mjs` 之 `assertBaseline`) | 完成:pixelmatch 8.0.0(OKLab HyAB),`{ includeAA: false, threshold: 0.1, checkerboard: true }`,容差 `MAX_DIFF = 100` | R-GANTT-TEST-01 | 同上、`test/unit-wganttchart-load.test.mjs`「僅樣式表失敗仍與標準圖一致」 |
 | 發布與建置機制(`script.txt`、`toolg/`、`.gitignore` 等) | 完成,比照先例 | R-GANTT-BUILD-01 | 以 `toolg/` 逐支執行驗證(見下) |
@@ -26,6 +26,7 @@
 
 ## 最近一次驗證
 
+- 2026-11-26 測試路由接線改用啟動後鉤子(R-GANTT-CDN-02 規則 3;只改測試端,`src/`、`package.json`、標準圖不變;依賴 `w-playwright` 1.0.6 之 `onBrowserCreated`、devDependency `w-package-tools-e2e` 1.0.55): `npm test` 31 passing(原 29 ＋ 新增「鉤子已掛」「鉤子已還原」2 案);守門改寫為「`useCdnLocal` 已登記、鉤子已掛(動態量測)、啟動出口 `isRouted`、`after` 已還原」,10 項變異檢查(含 1 項前提守門)全擊殺(清單見該規則);標準圖 0 改變.
 - 2026-11-25 測試不連外部 CDN(R-GANTT-CDN-02): 依賴 devDependency `w-package-tools-e2e ^1.0.51`(`createCdnLocal`);清單 2 網址(vis-timeline@7.7.3 之 css 與 UMD js);`npm test` 29 passing(原 22 ＋ `unit-wganttchart-cdn.test.mjs` 7);清空快取後首跑每網址只下載一次(`test/_cache/cdn/downloads.jsonl` 2 列、同一行程);斷網情境(`W_CDN_OFFLINE=1` ＋ `test/tools/offlineBlocker.mjs`)29 全綠、修前(HEAD)同環境 11 紅;標準圖 0 改變(本地副本、直連 CDN、標準圖三者之 PNG 逐位元組相同).
 
 - 版本: `package.json` 之 `version` 為 1.0.10(版號與發布由使用者之自動化流程處理,agent 不改);依賴 `w-playwright ^1.0.1`(裝 1.0.1,其 `playwright-core` 精確 1.64.1),已無 `playwright`.

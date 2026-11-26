@@ -34,7 +34,7 @@ async function withGantt(data, fn) {
 // 規格來源: src/WGanttchart.mjs 之 JSDoc、src/buildHtml.mjs 檔頭
 describe('WGanttchart 甘特圖', function() {
 
-    // 規格: 測試不連外部 CDN(R-GANTT-CDN-02); 本檔之 withGantt(wpw.launchChromium())與 WGanttchart(inp)皆經基底替身掛本地路由
+    // 規格: 測試不連外部 CDN(R-GANTT-CDN-02); 本檔之 withGantt(wpw.launchChromium())與 WGanttchart(inp)皆由 useCdnLocal 掛之啟動後鉤子掛本地路由
     useCdnLocal()
 
     // 規格: inp 格式 { axisStart, axisEnd, rows }; 日期為 'YYYY-MM-DD'; rows 每項須有 id, label, start, end

@@ -2,7 +2,7 @@ import assert from 'assert'
 import wpw from 'w-playwright'
 import WGanttchart from '../src/WGanttchart.mjs'
 import { isPng } from './tools/lib.mjs'
-import { cdn, nextRouted, useCdnLocal } from './tools/cdnLocal.mjs'
+import { cdn, useCdnLocal } from './tools/cdnLocal.mjs'
 
 // 測試用數據: 虛構之一般性內容(同 unit-wganttchart.test.mjs)
 const inp = {
@@ -20,7 +20,7 @@ const inp = {
 // 接線測試(w-playwright 帳本 R-PW-WIRING): 本套件只有 src/WGanttchart.mjs 一個啟動點; 以 setBrowserTypeForTest 觀察其送出之選項, 並斷言替身確被呼叫
 describe('WGanttchart 啟動經 w-playwright', function() {
 
-    // 規格: 測試不連外部 CDN(R-GANTT-CDN-02); 本檔自設之替身取代基底替身, 經 next() 真啟動者改以 nextRouted(next) 取得瀏覽器
+    // 規格: 測試不連外部 CDN(R-GANTT-CDN-02); useCdnLocal 掛之啟動後鉤子套在最終回傳給呼叫端之瀏覽器上, 與本檔自設之替身正交(替身內經 next() 取得之瀏覽器亦由鉤子掛本地路由)
     useCdnLocal()
 
     // 規格: 啟動點送出之選項含登入守門(命令列恰一個 --disable-features, 為 args 最後一個元素, 且含 AutofillAiWalletPrivatePasses),
@@ -34,7 +34,7 @@ describe('WGanttchart 啟動經 w-playwright', function() {
                 if (o.channel !== undefined || o.executablePath !== undefined || o.headless === false) {
                     throw new Error('not a headless shell launch') //安全: 若選項要求真 Chrome、Edge、完整 Chromium 或有頭, 不真啟動, 由下列斷言判紅
                 }
-                return nextRouted(next) // 取代基底替身, 故經 nextRouted 取得瀏覽器(掛 CDN 本地路由, 不連外部 CDN)
+                return next() // 真啟動; 回傳後由 useCdnLocal 之啟動後鉤子掛 CDN 本地路由(不連外部 CDN)
             },
         })
         let served0 = cdn.stats().served.browser
@@ -60,7 +60,7 @@ describe('WGanttchart 啟動經 w-playwright', function() {
         assert.ok(dis[0].split('=')[1].split(',').includes('AutofillAiWalletPrivatePasses'), `缺守門功能: ${dis[0]}`)
         assert.strictEqual(err, null, `經 next() 真啟動應成功: ${err && err.code}`)
         assert.ok(isPng(buf), '非 PNG')
-        assert.ok(cdn.stats().served.browser > served0, '繪圖庫應由本地副本供應(替身經 nextRouted 掛本地路由)')
+        assert.ok(cdn.stats().served.browser > served0, '繪圖庫應由本地副本供應(替身回傳之瀏覽器由啟動後鉤子掛本地路由)')
     })
 
     // 規格: README Notes 與 JSDoc @returns 載明啟動失敗即 reject(帶 code 之 Error, 由 w-playwright 給定); 不以替身以外之途徑啟動
